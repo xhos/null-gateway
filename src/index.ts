@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
+import { logger } from "./logger";
 
 const app = new Hono();
 
@@ -18,14 +19,30 @@ app.use(
 	}),
 );
 
-app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/**", async (c) => {
+	const start = Date.now();
+	const path = new URL(c.req.url).pathname;
+	const response = await auth.handler(c.req.raw);
+	logger.debug("auth", {
+		method: c.req.method,
+		path,
+		status: response.status,
+		duration_ms: Date.now() - start,
+	});
+	return response;
+});
 
 app.all("/api/*", async (c) => {
+	const start = Date.now();
 	const { token } = await auth.api.getToken({
 		headers: c.req.raw.headers,
 	});
 
 	if (!token) {
+		logger.warn("unauthorized", {
+			method: c.req.method,
+			path: new URL(c.req.url).pathname,
+		});
 		return c.json({ error: "Unauthorized" }, 401);
 	}
 
@@ -36,16 +53,32 @@ app.all("/api/*", async (c) => {
 		? undefined
 		: await c.req.raw.text();
 
-	const upstreamResponse = await fetch(targetUrl, {
-		method: c.req.method,
-		headers: {
-			"Content-Type": c.req.header("Content-Type") || "application/json",
-			Authorization: `Bearer ${token}`,
-		},
-		body,
-	});
+	let upstreamResponse: Response;
+	try {
+		upstreamResponse = await fetch(targetUrl, {
+			method: c.req.method,
+			headers: {
+				"Content-Type": c.req.header("Content-Type") || "application/json",
+				Authorization: `Bearer ${token}`,
+			},
+			body,
+		});
+	} catch (err) {
+		logger.error("upstream unreachable", {
+			path: targetPath,
+			err: String(err),
+		});
+		return c.json({ error: "upstream unavailable" }, 502);
+	}
 
 	const responseBody = await upstreamResponse.text();
+
+	logger.info("proxy", {
+		method: c.req.method,
+		path: targetPath,
+		status: upstreamResponse.status,
+		duration_ms: Date.now() - start,
+	});
 
 	return new Response(responseBody, {
 		status: upstreamResponse.status,
@@ -56,8 +89,13 @@ app.all("/api/*", async (c) => {
 	});
 });
 
+const port = parseInt(process.env.PORT || "55550");
+const hostname = process.env.HOSTNAME || "127.0.0.1";
+
+logger.info("server started", { addr: `${hostname}:${port}` });
+
 export default {
-	port: parseInt(process.env.PORT || "55550"),
-	hostname: process.env.HOSTNAME || "127.0.0.1",
+	port,
+	hostname,
 	fetch: app.fetch,
 };
