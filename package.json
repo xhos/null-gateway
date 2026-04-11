@@ -1,5 +1,6 @@
 {
 	"name": "null-gateway",
+	"version": "0.1.0",
 	"scripts": {
 		"dev": "bun run --hot src/index.ts",
 		"postinstall": "bun2nix -o bun.nix"
