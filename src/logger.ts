@@ -1,5 +1,3 @@
-import { appendFileSync } from "node:fs";
-
 type Level = "debug" | "info" | "warn" | "error";
 
 const LEVELS: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -29,7 +27,6 @@ function write(level: Level, msg: string, fields?: Record<string, unknown>) {
 	}
 
 	process.stdout.write(line);
-	if (format === "json") appendFileSync("null-gateway.log", line);
 }
 
 export const logger = {
