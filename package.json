@@ -3,6 +3,8 @@
 	"version": "0.1.0",
 	"scripts": {
 		"dev": "bun run --hot src/index.ts",
+		"test": "bun test",
+		"test:integration": "hurl --test tests/auth.hurl tests/proxy.hurl",
 		"postinstall": "bun2nix -o bun.nix"
 	},
 	"dependencies": {
