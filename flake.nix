@@ -68,7 +68,8 @@
           bun2nix.packages.${system}.default
 
           (writeShellScriptBin "run" ''
-            bun run dev
+            ${bun}/bin/bun install
+            exec ${bun}/bin/bun run dev
           '')
         ];
         shellHook = self.checks.${system}.pre-commit.shellHook;
